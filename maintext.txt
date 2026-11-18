@@ -1,0 +1,5 @@
+src/schema/
+├── __init__.py
+├── athlete.py      # Profile, measurements, biomechanical constraints, and training split
+├── feedback.py     # Post-workout telemetry (RPE, RIR, fatigue) and adjustment result
+└── workout.py      # Exercise structure, sets, workout prescription, and weekly plan
