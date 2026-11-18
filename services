@@ -1,0 +1,633 @@
+from src.rag.feedback_engine import TrainingFeedbackEngine
+
+# Exemplo de uso integrado no fluxo de chat:
+def process_student_checkin(session_data):
+    engine = TrainingFeedbackEngine()
+    feedback_analysis = engine.analyze_feedback(session_data)
+    
+    prompt_context = f"""
+    O aluno enviou o seguinte feedback da sessão de treino:
+    - Exercício: {session_data.get('exercise')}
+    - RPE Relatado: {session_data.get('rpe')}
+    - RIR Real vs Alvo: {session_data.get('actual_rir')} vs {session_data.get('target_rir')}
+    - Nível de Fadiga: {session_data.get('fatigue_level')}
+    - Ação Automática Sugerida pelo Sistema: {feedback_analysis['action']} ({feedback_analysis['reason']})
+    
+    Com base nas diretrizes científicas da nossa base de dados (ACSM/NSCA), formule a resposta motivacional e técnica ajustando o treino do aluno.
+    """
+    return prompt_context
+"""
+Feedback and Autoregulation Module for the AI Personal Trainer.
+Processes performance reports, RPE (Rating of Perceived Exertion), and fatigue
+to determine automatic adjustments in periodization (progression, maintenance, or deload).
+"""
+from typing import Dict, Any
+
+
+class TrainingFeedbackEngine:
+    def __init__(self):
+        # Limiares de RPE e RIR para tomada de decisão
+        self.rpe_high_threshold = 9.5
+        self.rpe_low_threshold = 7.0
+
+    def analyze_feedback(self, session_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analisa o feedback pós-treino do aluno.
+        
+        session_data esperado:
+        {
+            "exercise": "Supino Reto",
+            "target_rir": 2,
+            "actual_rir": 0,
+            "rpe": 10.0,
+            "fatigue_level": "alto", # baixo, moderado, alto, extremo
+            "completed_all_sets": True,
+            "joint_discomfort": False
+        }
+        """
+        rpe = session_data.get("rpe", 8.0)
+        actual_rir = session_data.get("actual_rir", 2)
+        target_rir = session_data.get("target_rir", 2)
+        fatigue = session_data.get("fatigue_level", "moderado")
+        discomfort = session_data.get("joint_discomfort", False)
+
+        adjustment = {
+            "action": "maintain",
+            "load_modifier": 0.0,  # percentual de ajuste na carga (ex: +0.02 para +2%)
+            "volume_modifier": 0,  # ajuste no número de séries
+            "reason": ""
+        }
+
+        # Regra 1: Dor articular ou desconforto agudo -> Substituição imediata ou deload no exercício
+        if discomfort:
+            adjustment["action"] = "substitute_exercise"
+            adjustment["reason"] = "Relato de desconforto articular. Necessária substituição por exercício com menor cisalhamento/estresse."
+            return adjustment
+
+        # Regra 2: Fadiga extrema ou RPE 10 consistente abaixo do RIR alvo -> Risco de overreaching excessivo
+        if fatigue == "extremo" or (rpe >= 9.5 and actual_rir < target_rir - 1):
+            adjustment["action"] = "deload_or_drop"
+            adjustment["load_modifier"] = -0.05  # Reduz 5% da carga
+            adjustment["volume_modifier"] = -1   # Remove 1 série de trabalho
+            adjustment["reason"] = "Sinais de fadiga sistêmica acumulada ou queda de rendimento. Reduzindo volume e carga para recuperação."
+            return adjustment
+
+        # Regra 3: Progressão de carga (Progressive Overload) se RIR foi maior que o alvo (fácil)
+        if actual_rir > target_rir + 1 and fatigue in ["baixo", "moderado"]:
+            adjustment["action"] = "progress_load"
+            adjustment["load_modifier"] = 0.03  # Aumenta 3% a 5% na próxima sessão
+            adjustment["reason"] = "Desempenho acima do esperado com RIR folgado. Indicada progressão de carga."
+            return adjustment
+
+        # Padrão: Manter progressão atual
+        adjustment["action"] = "maintain"
+        adjustment["reason"] = "Progresso estável dentro da zona alvo de esforço (RIR/RPE)."
+        return adjustment
+
+
+if __name__ == "__main__":
+    engine = TrainingFeedbackEngine()
+    
+    # Exemplo de teste de feedback (Aluno fadigado)
+    sample_feedback = {
+        "exercise": "Agachamento Livre",
+        "target_rir": 2,
+        "actual_rir": 0,
+        "rpe": 10.0,
+        "fatigue_level": "extremo",
+        "completed_all_sets": True,
+        "joint_discomfort": False
+    }
+    
+    result = engine.analyze_feedback(sample_feedback)
+    print("Análise de Feedback:", result)
+# 🏋️ IA Personal Trainer — Inteligência Artificial para Treinamento Físico
+
+## 1. Sobre o projeto
+
+A **IA Personal Trainer** é um projeto de inteligência artificial desenvolvido em Python, com o objetivo de atuar como um assistente virtual especializado em treinamento físico, musculação, Bodybuilding e Jiu-Jitsu Brasileiro (BJJ).
+
+O projeto busca combinar recursos de inteligência artificial, processamento de linguagem natural, armazenamento de informações e recuperação inteligente de conhecimento para oferecer orientações relacionadas ao desenvolvimento físico, organização dos treinamentos e acompanhamento da evolução esportiva.
+
+A proposta é desenvolver um assistente capaz de compreender as necessidades do praticante, fornecer explicações sobre métodos de treinamento, auxiliar na organização das sessões de musculação e registrar informações importantes sobre sua rotina esportiva.
+
+Diferentemente de um chatbot convencional, a IA Personal Trainer utiliza uma arquitetura modular, permitindo separar as responsabilidades de processamento, gerenciamento de conhecimento, armazenamento de dados e execução de funcionalidades específicas.
+
+O projeto também utiliza a abordagem **RAG (Retrieval-Augmented Generation)**, que possibilita consultar uma base de conhecimento própria antes de elaborar determinadas respostas.
+
+## 2. Objetivos do projeto
+
+O principal objetivo é desenvolver um assistente inteligente que auxilie praticantes de musculação e atletas de artes marciais na organização e compreensão de seus treinamentos.
+
+Entre os objetivos específicos estão:
+
+- Desenvolver uma IA especializada em musculação e Bodybuilding.
+- Auxiliar na compreensão de princípios de hipertrofia muscular.
+- Oferecer informações sobre métodos e estratégias de treinamento.
+- Integrar conhecimentos relacionados à preparação física para o Jiu-Jitsu Brasileiro.
+- Permitir o registro e a consulta do histórico de treinamentos.
+- Implementar um sistema de recuperação de conhecimento utilizando RAG.
+- Organizar as informações em uma estrutura modular e escalável.
+- Criar uma base de conhecimento própria sobre treinamento físico.
+- Facilitar futuras integrações com bancos de dados e ferramentas de acompanhamento esportivo.
+
+## 3. Público-alvo
+
+A aplicação é direcionada principalmente a:
+
+- Praticantes de musculação.
+- Pessoas interessadas em hipertrofia muscular.
+- Atletas de Bodybuilding.
+- Praticantes de Jiu-Jitsu Brasileiro.
+- Atletas que conciliam musculação e artes marciais.
+- Pessoas interessadas em preparação física e condicionamento.
+- Estudantes e profissionais interessados em treinamento esportivo.
+
+A IA pretende atender desde praticantes iniciantes até usuários com maior experiência, adaptando a complexidade das explicações conforme as informações disponíveis sobre cada pessoa.
+
+## 4. Especialidades da IA
+
+### 4.1. Bodybuilding e hipertrofia muscular
+
+Uma das principais especialidades do projeto é o treinamento resistido voltado ao desenvolvimento muscular.
+
+A IA poderá auxiliar na compreensão de conceitos como:
+
+- Hipertrofia muscular.
+- Volume de treinamento.
+- Intensidade e frequência.
+- Sobrecarga progressiva.
+- Seleção e execução de exercícios.
+- Séries, repetições e intervalos de descanso.
+- Proximidade da falha muscular.
+- RIR (Repetições em Reserva).
+- RPE (Percepção Subjetiva de Esforço).
+- Divisões de treinamento, como ABC, ABCD e PPL.
+- Organização de sessões de musculação.
+- Recuperação entre sessões.
+- Monitoramento da evolução das cargas.
+
+O objetivo é fornecer explicações fundamentadas nos princípios do treinamento resistido, respeitando o nível de experiência, a disponibilidade e as condições individuais do praticante.
+
+### 4.2. Preparação física para Jiu-Jitsu Brasileiro
+
+A segunda especialidade do projeto é a preparação física voltada ao Jiu-Jitsu Brasileiro.
+
+A proposta é compreender as demandas físicas da modalidade e auxiliar na organização de treinamentos complementares.
+
+Entre os principais aspectos abordados estão:
+
+- Força muscular.
+- Resistência muscular.
+- Estabilidade do core.
+- Mobilidade articular.
+- Flexibilidade.
+- Potência muscular.
+- Condicionamento físico.
+- Resistência à fadiga.
+- Recuperação entre sessões.
+- Desenvolvimento da força de pegada.
+- Prevenção de sobrecargas relacionadas ao treinamento.
+
+A IA também deverá considerar a relação entre o volume de musculação e a frequência dos treinos de Jiu-Jitsu, evitando recomendar uma carga de trabalho incompatível com a recuperação do atleta.
+
+## 5. Tecnologias utilizadas
+
+O projeto utiliza tecnologias voltadas ao desenvolvimento de aplicações inteligentes e ao armazenamento estruturado de informações.
+
+| Tecnologia | Finalidade |
+|---|---|
+| Python | Linguagem principal do projeto. |
+| OpenAI API | Comunicação com modelos de inteligência artificial. |
+| OpenAI Embeddings | Transformação de textos em representações vetoriais. |
+| SQLite | Armazenamento local de informações. |
+| JSON | Organização e comunicação de dados. |
+| python-dotenv | Gerenciamento de variáveis de ambiente. |
+| RAG | Recuperação de informações relevantes para contextualizar respostas. |
+
+### Principais bibliotecas
+
+- `openai`: integração com a API da OpenAI.
+- `python-dotenv`: carregamento das configurações presentes no arquivo `.env`.
+- `json`: manipulação de estruturas de dados.
+- `sqlite3`: gerenciamento do banco de dados SQLite.
+- `typing`: organização e indicação de tipos de dados.
+- `pathlib`: manipulação de caminhos e arquivos.
+
+## 6. Arquitetura e organização do projeto
+
+A IA Personal Trainer utiliza uma arquitetura modular, na qual cada diretório possui responsabilidades específicas.
+
+```text
+projetoia/
+│
+├── .venv/
+│
+├── core/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── rag.py
+│   ├── config.py
+│   └── exceptions.py
+│
+├── agents/
+│   ├── __init__.py
+│   └── prompts.py
+│
+├── database/
+│   ├── __init__.py
+│   └── memory.py
+│
+├── services/
+│   ├── __init__.py
+│   └── training_tools.py
+│
+├── schemas/
+│   ├── __init__.py
+│   └── tool_schemas.py
+│
+├── knowledge/
+│   ├── hipertrofia.md
+│   ├── bodybuilding.md
+│   └── jiu_jitsu.md
+│
+├── tests/
+│   └── test_training_tools.py
+│
+├── main.py
+├── requirements.txt
+├── .env
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+### 6.1. Diretório core/
+
+É o núcleo central da aplicação.
+
+**agent.py**
+
+Responsável pelo funcionamento do agente de inteligência artificial.
+
+Suas principais responsabilidades são:
+
+- Inicializar a comunicação com a OpenAI.
+- Receber mensagens dos usuários.
+- Construir o contexto da conversa.
+- Consultar o sistema RAG.
+- Executar ferramentas disponibilizadas ao modelo.
+- Processar respostas e chamadas de ferramentas.
+- Gerenciar o histórico da conversa durante a execução.
+
+**rag.py**
+
+Implementa o sistema de recuperação aumentada por geração.
+
+Suas responsabilidades incluem:
+
+- Receber documentos de conhecimento.
+- Dividir documentos em fragmentos menores.
+- Gerar embeddings utilizando a OpenAI API.
+- Armazenar os fragmentos e suas representações vetoriais.
+- Recuperar os conteúdos mais relevantes para uma pergunta.
+- Calcular a similaridade entre os embeddings.
+
+**config.py**
+
+Centraliza as configurações da aplicação.
+
+Deve disponibilizar informações como:
+
+- Chave de API.
+- Modelo de inteligência artificial.
+- Caminho do banco de dados.
+- Limite de chamadas de ferramentas.
+- Configurações gerais do projeto.
+
+**exceptions.py**
+
+Será responsável pela organização de exceções personalizadas, permitindo tratar erros específicos da aplicação de maneira mais organizada.
+
+### 6.2. Diretório agents/
+
+Armazena os prompts e as instruções que definem o comportamento da inteligência artificial.
+
+**prompts.py**
+
+Define a personalidade, as especialidades e as regras de funcionamento da IA Personal Trainer.
+
+O prompt deverá orientar o modelo a:
+
+- Atuar como assistente especializado em treinamento físico.
+- Fornecer explicações claras e fundamentadas.
+- Considerar as particularidades do Bodybuilding e do Jiu-Jitsu.
+- Solicitar informações importantes antes de elaborar recomendações individualizadas.
+- Evitar inventar informações sobre o usuário.
+- Respeitar limites de segurança e recuperação física.
+
+### 6.3. Diretório database/
+
+Responsável pelo armazenamento e gerenciamento das informações.
+
+**memory.py**
+
+Implementa o sistema de memória da aplicação, utilizando SQLite.
+
+Sua finalidade é permitir a persistência de informações relevantes, como histórico de conversas e outros registros definidos na arquitetura.
+
+A integração completa dessa memória com o agente é uma etapa de desenvolvimento.
+
+### 6.4. Diretório services/
+
+Contém os serviços e as funcionalidades que podem ser executados pelo agente.
+
+**training_tools.py**
+
+Disponibiliza funções relacionadas ao gerenciamento de treinamentos.
+
+Entre as funcionalidades previstas estão:
+
+- Registrar sessões de musculação.
+- Registrar sessões de Jiu-Jitsu.
+- Consultar o histórico de treinamentos.
+- Armazenar informações sobre duração e foco das sessões.
+- Recuperar registros anteriores.
+
+Essas funções poderão ser ampliadas futuramente para incluir acompanhamento de cargas, volume de treinamento e evolução física.
+
+### 6.5. Diretório schemas/
+
+Contém os esquemas de dados utilizados na comunicação entre o modelo e as ferramentas.
+
+**tool_schemas.py**
+
+Define as ferramentas disponíveis para a inteligência artificial, utilizando os parâmetros e formatos esperados pela API da OpenAI.
+
+Essa organização permite que o modelo identifique quais funcionalidades estão disponíveis e quais argumentos precisam ser fornecidos para executá-las.
+
+### 6.6. Diretório knowledge/
+
+Armazena os materiais utilizados como base de conhecimento do sistema RAG.
+
+Os documentos podem conter informações sobre:
+
+- Hipertrofia muscular.
+- Bodybuilding.
+- Treinamento resistido.
+- Biomecânica.
+- Fisiologia do exercício.
+- Recuperação muscular.
+- Preparação física.
+- Jiu-Jitsu Brasileiro.
+- Condicionamento físico.
+
+Inicialmente, o sistema RAG está preparado para importar documentos nos formatos `.txt` e `.md`.
+
+A qualidade das respostas dependerá da qualidade, atualidade e confiabilidade dos materiais utilizados.
+
+### 6.7. Diretório tests/
+
+Armazena os testes automatizados da aplicação.
+
+A finalidade é verificar se as funcionalidades estão funcionando corretamente e reduzir a ocorrência de erros durante o desenvolvimento.
+
+Os testes poderão abranger:
+
+- Registro de treinamentos.
+- Consulta de histórico.
+- Validação de dados.
+- Processamento de documentos.
+- Recuperação de conhecimento.
+- Integração entre os módulos.
+
+## 7. Sistema RAG — Retrieval-Augmented Generation
+
+Um dos principais diferenciais técnicos da IA Personal Trainer é a utilização de RAG.
+
+RAG significa *Retrieval-Augmented Generation*, ou geração aumentada por recuperação.
+
+Essa abordagem permite que o modelo consulte informações externas armazenadas em uma base de conhecimento antes de formular uma resposta.
+
+Em vez de depender exclusivamente das informações aprendidas durante seu treinamento, a aplicação recupera documentos relacionados à pergunta e utiliza os trechos relevantes como contexto adicional.
+
+### Como funciona o RAG?
+
+**Etapa 1 — Inserção dos documentos**
+
+O desenvolvedor adiciona materiais relacionados a treinamento físico na pasta `knowledge/`.
+
+Exemplos:
+
+- hipertrofia.md
+- bodybuilding.md
+- jiu_jitsu.md
+
+**Etapa 2 — Fragmentação**
+
+Os documentos são divididos em fragmentos menores, chamados de *chunks*.
+
+Essa divisão facilita a recuperação de informações específicas.
+
+**Etapa 3 — Geração de embeddings**
+
+Cada fragmento é transformado em um vetor numérico por meio do modelo `text-embedding-3-small`.
+
+Os embeddings representam características semânticas dos textos.
+
+**Etapa 4 — Armazenamento**
+
+Os fragmentos e seus respectivos embeddings são armazenados no banco de dados SQLite.
+
+**Etapa 5 — Recuperação**
+
+Quando o usuário faz uma pergunta, o sistema gera um embedding da consulta e compara sua similaridade com os fragmentos armazenados.
+
+**Etapa 6 — Geração da resposta**
+
+Os conteúdos mais relevantes são encaminhados ao agente como contexto adicional para a elaboração da resposta.
+
+### Exemplo prático
+
+Imagine que o usuário pergunte:
+
+"Como posso conciliar musculação e Jiu-Jitsu sem prejudicar minha recuperação muscular?"
+
+O sistema poderá:
+
+1. Identificar os termos e o contexto da pergunta.
+2. Consultar os documentos relacionados à recuperação muscular.
+3. Recuperar informações sobre volume de treinamento, frequência e fadiga.
+4. Encaminhar os trechos relevantes ao agente.
+5. Elaborar uma resposta contextualizada.
+
+É importante destacar que o RAG não garante automaticamente a veracidade das informações. A qualidade das respostas depende das fontes utilizadas e da capacidade do modelo de interpretar corretamente o contexto recuperado.
+
+## 8. Funcionalidades do projeto
+
+A aplicação está sendo desenvolvida para oferecer funcionalidades como:
+
+| Funcionalidade | Descrição |
+|---|---|
+| Assistente virtual | Conversação com IA especializada em treinamento físico. |
+| Registro de treinos | Armazenamento de sessões de musculação e Jiu-Jitsu. |
+| Consulta de histórico | Recuperação de treinamentos registrados. |
+| Base de conhecimento | Armazenamento de materiais sobre treinamento esportivo. |
+| Sistema RAG | Recuperação de informações relevantes para as respostas. |
+| Tool Calling | Execução de funções específicas solicitadas pelo modelo. |
+| Memória persistente | Armazenamento de informações entre sessões, mediante integração do módulo de memória. |
+
+## 9. Instalação e configuração
+
+### Pré-requisitos
+
+Antes de executar o projeto, é necessário possuir:
+
+- Python instalado.
+- Visual Studio Code ou outra IDE.
+- Acesso à internet.
+- Uma chave de API da OpenAI.
+- Git (opcional, para controle de versão).
+
+### 9.1. Clonar o repositório
+
+Caso o projeto esteja publicado no GitHub:
+
+```bash
+git clone URL_DO_REPOSITORIO
+```
+
+Entre no diretório:
+
+```bash
+cd projetoia
+```
+
+### 9.2. Criar o ambiente virtual
+
+No Windows:
+
+```powershell
+python -m venv .venv
+```
+
+Ative o ambiente:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+### 9.3. Instalar as dependências
+
+```powershell
+pip install -r requirements.txt
+```
+
+As dependências principais incluem:
+
+```text
+openai
+python-dotenv
+```
+
+### 9.4. Configurar as variáveis de ambiente
+
+Crie um arquivo `.env` na raiz do projeto:
+
+```env
+OPENAI_API_KEY=sua_chave_de_api
+OPENAI_MODEL=gpt-4o-mini
+MAX_TOOL_ROUNDS=5
+DATABASE_PATH=data/personal_trainer.db
+```
+
+A chave de API deve ser mantida em segurança e nunca publicada diretamente no GitHub.
+
+### 9.5. Executar a aplicação
+
+Após configurar os módulos e as dependências:
+
+```powershell
+python main.py
+```
+
+## 10. Segurança e responsabilidade
+
+A IA Personal Trainer é um assistente informativo voltado ao treinamento físico.
+
+Suas recomendações devem considerar as condições individuais do praticante e não substituir a avaliação de profissionais habilitados.
+
+O sistema deverá observar os seguintes princípios:
+
+- Não diagnosticar lesões ou doenças.
+- Não prescrever tratamentos médicos.
+- Não recomendar a continuidade de exercícios diante de sinais de lesão ou dor preocupante.
+- Considerar a recuperação e o descanso.
+- Evitar recomendações de cargas excessivas.
+- Não inventar informações sobre o histórico do usuário.
+- Priorizar fontes confiáveis e atualizadas.
+- Reconhecer quando uma pergunta exige avaliação profissional.
+
+As informações fornecidas pela IA devem ser interpretadas como apoio educacional e não como substituição do acompanhamento profissional individualizado.
+
+## 11. Possíveis melhorias futuras
+
+A arquitetura modular permite ampliar o projeto gradualmente.
+
+Entre as funcionalidades que poderão ser implementadas estão:
+
+**Monitoramento de hipertrofia**
+- Acompanhamento de cargas.
+- Registro de séries e repetições.
+- Cálculo de volume semanal.
+- Comparação entre períodos de treinamento.
+- Monitoramento de progressão de exercícios.
+
+**Integração com Jiu-Jitsu**
+- Registro de duração dos treinos.
+- Acompanhamento da frequência semanal.
+- Monitoramento da percepção de esforço.
+- Organização de sessões de preparação física.
+- Controle da carga total de treinamento.
+
+**Sistema de recuperação**
+- Registro subjetivo de fadiga.
+- Monitoramento de qualidade do sono.
+- Acompanhamento da percepção de recuperação.
+- Alertas para possíveis sinais de excesso de treinamento.
+
+**Expansão do RAG**
+- Importação de documentos PDF.
+- Organização de fontes por categoria.
+- Inclusão de materiais científicos.
+- Melhorias na recuperação semântica.
+- Filtros por modalidade e assunto.
+
+**Interface de usuário**
+- Desenvolvimento de uma interface web.
+- Dashboard de evolução física.
+- Visualização de históricos.
+- Gráficos de volume e progressão.
+- Integração futura com aplicativos de treinamento.
+
+## 12. Considerações finais
+
+A IA Personal Trainer representa um projeto de desenvolvimento de software que combina inteligência artificial, treinamento físico e organização de informações esportivas.
+
+Sua arquitetura modular foi pensada para facilitar a manutenção, a expansão e a integração de novas funcionalidades.
+
+A combinação entre OpenAI API, Python, SQLite e RAG permite construir uma aplicação capaz de interpretar perguntas, recuperar informações de uma base própria e executar funcionalidades relacionadas ao acompanhamento de treinamentos.
+
+O objetivo de longo prazo é transformar a aplicação em um assistente inteligente cada vez mais completo, capaz de auxiliar praticantes de musculação e atletas de Jiu-Jitsu na organização de suas rotinas e no acompanhamento de sua evolução esportiva.
+
+---
+
+**Desenvolvido com Python, inteligência artificial e foco em treinamento esportivo.**
+
+**Projeto:** IA Personal Trainer  
+**Especialidades:** Bodybuilding, Hipertrofia Muscular e Jiu-Jitsu Brasileiro  
+**Arquitetura:** Modular + RAG  
+**Banco de dados:** SQLite  
+**Integração de IA:** OpenAI API#   s i s t e m a d e i a 
+ 
+ 
